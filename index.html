@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ChartVision AI</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root {
   --bg: #09090b; --surface: rgba(255,255,255,0.03); --border: rgba(255,255,255,0.06);
@@ -319,7 +319,8 @@ input, select { font-family: inherit; }
 // TODO: Replace these with your Supabase project credentials
 const SUPABASE_URL = 'https://pcfddjwdeucsatxkxdxf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBjZmRkandkZXVjc2F0eGt4ZHhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMzU4MTUsImV4cCI6MjA5MTcxMTgxNX0.cQ3mDLMLfN0sDMhTHwdP2jZje2N_y3ZiFWMFDs9XCyk';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let sb = null;
+try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { console.error('Supabase init failed:', e); }
 
 const PROVIDERS = {
   anthropic: { name: 'Claude Sonnet 4', color: '#d97706', hasWebSearch: true },
@@ -367,8 +368,9 @@ const NEWS_SYSTEM = `You are a financial news analyst. Search for and analyze th
 
 // ── Auth Functions ──
 async function init() {
+  if (!sb) { enterGuestMode(); document.getElementById('authLoading').classList.add('hidden'); return; }
   try {
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    sb.auth.onAuthStateChange(async (event, session) => {
       state.user = session?.user || null;
       if (state.user) {
         state.guestMode = false;
@@ -377,7 +379,7 @@ async function init() {
       updateAuthUI();
       updateUI();
     });
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await sb.auth.getSession();
     state.user = session?.user || null;
     if (state.user) {
       await loadKeysFromDB();
@@ -438,7 +440,7 @@ async function handleAuth() {
 
   try {
     if (authMode === 'signup') {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await sb.auth.signUp({ email, password });
       if (error) throw error;
       if (data.user && !data.session) {
         successBox.textContent = 'Check your email for a confirmation link, then sign in.';
@@ -447,7 +449,7 @@ async function handleAuth() {
         closeAuthModal();
       }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
       closeAuthModal();
     }
@@ -461,7 +463,7 @@ async function handleAuth() {
 }
 
 async function doSignOut() {
-  await supabase.auth.signOut();
+  await sb.auth.signOut();
   state.user = null;
   state.keys = { anthropic:'', openai:'', gemini:'', xai:'' };
   state.provider = null;
@@ -552,7 +554,7 @@ async function saveKeys() {
   // If logged in, also save to Supabase
   if (state.user) {
     try {
-      await supabase.from('user_keys').upsert({
+      await sb.from('user_keys').upsert({
         user_id: state.user.id,
         anthropic: state.keys.anthropic,
         openai: state.keys.openai,
@@ -576,7 +578,7 @@ async function clearAllKeys() {
   localStorage.removeItem('cv_keys');
   if (state.user) {
     try {
-      await supabase.from('user_keys').upsert({
+      await sb.from('user_keys').upsert({
         user_id: state.user.id,
         anthropic: '', openai: '', gemini: '', xai: '',
         updated_at: new Date().toISOString(),
