@@ -184,6 +184,14 @@ input, select { font-family: inherit; }
 .ladder-rr-item { font-size: 11px; font-family: var(--mono); color: var(--muted); }
 .ladder-rr-item span { font-weight: 700; }
 
+.timeframe-picker { margin-bottom: 12px; }
+.tf-options { display: flex; gap: 6px; flex-wrap: wrap; }
+.tf-option { display: flex; }
+.tf-option input { display: none; }
+.tf-option span { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 700; font-family: var(--mono); cursor: pointer; transition: all 0.15s; }
+.tf-option:hover span { border-color: rgba(255,255,255,0.15); color: var(--text); }
+.tf-option.active span, .tf-option input:checked + span { border-color: var(--accent); color: #a5b4fc; background: rgba(99,102,241,0.1); }
+
 .history-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
 .history-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; }
 .history-item:hover { border-color: rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); }
@@ -288,6 +296,15 @@ input, select { font-family: inherit; }
     <div class="thumb-grid hidden" id="thumbGrid"></div>
   </div>
 
+  <div class="timeframe-picker hidden" id="timeframePicker">
+    <div class="card-label" style="margin-bottom:8px;">Hold Duration</div>
+    <div class="tf-options">
+      <label class="tf-option active"><input type="radio" name="tf" value="auto" checked onchange="setTimeframe(this.value)"><span>Auto</span></label>
+      <label class="tf-option"><input type="radio" name="tf" value="intraday" onchange="setTimeframe(this.value)"><span>Same Day</span></label>
+      <label class="tf-option"><input type="radio" name="tf" value="3day" onchange="setTimeframe(this.value)"><span>3 Day</span></label>
+      <label class="tf-option"><input type="radio" name="tf" value="1week" onchange="setTimeframe(this.value)"><span>1 Week</span></label>
+    </div>
+  </div>
   <button class="analyze-btn disabled hidden" id="analyzeBtn" onclick="runAnalysis()" disabled>⚡ ANALYZE</button>
   <div class="error-box hidden" id="errorBox"></div>
   <div class="results hidden" id="results"></div>
@@ -383,6 +400,7 @@ let state = {
   user: null,
   guestMode: false,
   history: [],
+  timeframe: 'auto',
 };
 
 const TA_SYSTEM = `You are an elite technical analyst and professional trader with 25+ years of experience. You will be given one or more chart images (could be different timeframes of the same asset, or a single chart).
@@ -648,6 +666,23 @@ function selectProvider(p) {
   updateUI();
 }
 
+function newScan() {
+  state.analysis = null;
+  state.newsData = null;
+  state.images = [];
+  document.getElementById('results').classList.add('hidden');
+  renderThumbs();
+  updateUI();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function setTimeframe(tf) {
+  state.timeframe = tf;
+  document.querySelectorAll('.tf-option').forEach(el => {
+    el.classList.toggle('active', el.querySelector('input').value === tf);
+  });
+}
+
 function toggleVis(id) {
   const el = document.getElementById(id);
   el.type = el.type === 'password' ? 'text' : 'password';
@@ -689,8 +724,9 @@ function updateUI() {
     ).join('');
   } else { picker.classList.add('hidden'); }
 
-  // Hide upload + analyze when not in app mode
+  // Hide upload + analyze + timeframe when not in app mode
   document.getElementById('uploadZone').classList.toggle('hidden', !appActive);
+  document.getElementById('timeframePicker').classList.toggle('hidden', !appActive);
   document.getElementById('analyzeBtn').classList.toggle('hidden', !appActive);
 
   const btn = document.getElementById('analyzeBtn');
@@ -784,15 +820,23 @@ async function callXAI(messages) {
   return data.choices?.[0]?.message?.content||'';
 }
 
+function getTimeframePrompt() {
+  const tf = state.timeframe;
+  if (tf === 'auto') return 'Analyze these chart(s). Identify the asset from the chart. Use your best judgment for hold duration. Respond ONLY with JSON.';
+  const labels = { intraday: 'an intraday/same-day trade (hours)', '3day': 'a 3-day swing trade', '1week': 'a 1-week hold' };
+  return 'Analyze these chart(s). Identify the asset from the chart. IMPORTANT: Optimize your entry, stop loss, and take profit levels specifically for ' + labels[tf] + '. Set hold_duration to match this timeframe. Adjust your targets and stop loss to be realistic for this holding period. Respond ONLY with JSON.';
+}
+
 async function doChartAnalysis() {
   const p = state.provider;
+  const prompt = getTimeframePrompt();
   if (p === 'anthropic') {
     const content = [];
     state.images.forEach((img,i) => {
       if (state.images.length > 1) content.push({ type:'text', text:'--- CHART '+(i+1)+' ---' });
       content.push({ type:'image', source:{ type:'base64', media_type:img.mediaType, data:img.base64 } });
     });
-    content.push({ type:'text', text:'Analyze these chart(s). Identify the asset from the chart. Respond ONLY with JSON.' });
+    content.push({ type:'text', text:prompt });
     return await callAnthropic([{ role:'user', content }], TA_SYSTEM);
   }
   if (p === 'openai' || p === 'xai') {
@@ -801,7 +845,7 @@ async function doChartAnalysis() {
       if (state.images.length > 1) content.push({ type:'text', text:'--- CHART '+(i+1)+' ---' });
       content.push({ type:'image_url', image_url:{ url:'data:'+img.mediaType+';base64,'+img.base64 } });
     });
-    content.push({ type:'text', text:'Analyze these chart(s). Identify the asset from the chart. Respond ONLY with JSON.' });
+    content.push({ type:'text', text:prompt });
     const msgs = [{ role:'system', content:TA_SYSTEM }, { role:'user', content }];
     return p === 'openai' ? await callOpenAI(msgs) : await callXAI(msgs);
   }
@@ -811,7 +855,7 @@ async function doChartAnalysis() {
       if (state.images.length > 1) parts.push({ text:'--- CHART '+(i+1)+' ---' });
       parts.push({ inline_data:{ mime_type:img.mediaType, data:img.base64 } });
     });
-    parts.push({ text:'Analyze these chart(s). Identify the asset from the chart. Respond ONLY with JSON. No backticks.' });
+    parts.push({ text:prompt + ' No backticks.' });
     return await callGemini([{ parts }]);
   }
 }
@@ -877,6 +921,7 @@ function renderResults() {
     '<button class="tab-btn '+(state.activeTab==='technicals'?'active':'')+'" onclick="switchTab(\'technicals\')">Technicals</button>' +
     '<button class="tab-btn '+(state.activeTab==='news'?'active':'')+'" onclick="switchTab(\'news\')">'+newsLabel+'</button></div>' +
     '<div id="tabContent">'+renderTab()+'</div>' +
+    '<div style="text-align:center;margin-top:12px;"><button class="settings-btn" onclick="newScan()" style="padding:10px 24px;font-size:13px;">+ New Scan</button></div>' +
     '<div class="disclaimer">AI-generated analysis for educational purposes only. Not financial advice. Always DYOR and manage risk.</div>';
 }
 
@@ -991,6 +1036,7 @@ async function saveToHistory(analysis, newsData, thumbnail) {
     analysis: analysis,
     news: newsData,
     thumbnail: thumbnail,
+    timeframe: state.timeframe,
     created_at: new Date().toISOString(),
   };
   // Save to localStorage
@@ -1040,11 +1086,13 @@ function renderHistory() {
   list.innerHTML = state.history.map((h, i) => {
     const dir = (h.direction||'').toLowerCase();
     const date = new Date(h.created_at).toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    const tfLabels = { auto:'Auto', intraday:'Same Day', '3day':'3 Day', '1week':'1 Week' };
+    const tfDisplay = h.timeframe && h.timeframe !== 'auto' ? ' · ' + (tfLabels[h.timeframe]||h.timeframe) : '';
     const thumbHtml = h.thumbnail ? '<img class="history-thumb" src="'+h.thumbnail+'" alt="">' : '';
     return '<div class="history-item" onclick="loadScan('+i+')">' +
       thumbHtml +
       '<div class="history-info"><div class="history-asset">'+esc(h.asset)+'</div>' +
-      '<div class="history-meta">'+date+' · Confidence: '+h.confidence+'/10</div></div>' +
+      '<div class="history-meta">'+date+' · Confidence: '+h.confidence+'/10'+tfDisplay+'</div></div>' +
       '<span class="history-dir '+dir+'">'+esc(h.direction)+'</span>' +
       '<button class="history-delete" onclick="event.stopPropagation();deleteScan('+i+')" title="Delete">✕</button></div>';
   }).join('');
