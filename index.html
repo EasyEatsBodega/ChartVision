@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChartVision AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #09090b; --surface: rgba(255,255,255,0.03); --border: rgba(255,255,255,0.06);
+  --text: #e5e7eb; --muted: #6b7280; --accent: #6366f1; --accent2: #8b5cf6;
+  --green: #10b981; --red: #ef4444; --yellow: #f59e0b;
+  --mono: 'JetBrains Mono', monospace; --sans: 'Inter', system-ui, sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+button { cursor: pointer; font-family: inherit; }
+input, select { font-family: inherit; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+.header { border-bottom: 1px solid var(--border); padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; }
+.logo-group { display: flex; align-items: center; gap: 12px; }
+.logo-icon { width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.logo-title { font-weight: 800; font-size: 17px; letter-spacing: -0.5px; }
+.logo-sub { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.header-actions { display: flex; gap: 8px; align-items: center; }
+.settings-btn { background: var(--surface); border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
+.settings-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.15); }
+.provider-badge { font-size: 11px; padding: 4px 10px; border-radius: 16px; font-family: var(--mono); font-weight: 600; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal { background: #18181b; border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; }
+.modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.modal-header h2 { font-size: 18px; font-weight: 800; }
+.modal-close { background: none; border: none; color: var(--muted); font-size: 20px; padding: 4px; }
+.modal-body { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+.key-group { display: flex; flex-direction: column; gap: 6px; }
+.key-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-family: var(--mono); display: flex; align-items: center; gap: 8px; }
+.provider-dot { width: 16px; height: 16px; border-radius: 4px; display: inline-block; }
+.key-input-wrap { position: relative; }
+.key-input { width: 100%; padding: 12px 40px 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; font-family: var(--mono); outline: none; transition: border-color 0.15s; }
+.key-input:focus { border-color: var(--accent); }
+.key-input::placeholder { color: #3f3f46; }
+.key-toggle { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--muted); font-size: 16px; }
+.key-hint { font-size: 11px; color: #52525b; }
+.key-status { font-size: 11px; font-family: var(--mono); font-weight: 600; }
+.key-status.set { color: var(--green); }
+.key-status.unset { color: #52525b; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+.btn-secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 13px; }
+.btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); border: none; color: #fff; padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 13px; }
+
+.main { padding: 20px; max-width: 820px; margin: 0 auto; }
+
+.provider-picker { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.provider-pick-btn { padding: 10px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 700; font-family: var(--mono); transition: all 0.15s; display: flex; align-items: center; gap: 8px; }
+.provider-pick-btn.active { border-color: var(--accent); color: #a5b4fc; background: rgba(99,102,241,0.1); }
+.provider-pick-btn .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+.upload-zone { border: 2px dashed var(--border); border-radius: 14px; padding: 32px 20px; text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 16px; min-height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.upload-zone:hover { border-color: rgba(255,255,255,0.15); }
+.upload-zone.drag-over { border-color: var(--accent); background: rgba(99,102,241,0.05); }
+.upload-zone.has-images { padding: 16px; cursor: default; }
+.upload-icon { font-size: 36px; opacity: 0.3; margin-bottom: 8px; }
+.upload-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.upload-hint { font-size: 12px; color: var(--muted); }
+
+.thumb-grid { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; }
+.thumb-item { position: relative; width: 120px; height: 90px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+.thumb-item img { width: 100%; height: 100%; object-fit: cover; }
+.thumb-remove { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,0.7); border: none; color: #fca5a5; border-radius: 4px; padding: 2px 6px; font-size: 11px; cursor: pointer; }
+.thumb-index { position: absolute; bottom: 4px; left: 4px; background: rgba(0,0,0,0.7); color: #a5b4fc; font-size: 10px; font-family: var(--mono); font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+.thumb-add { width: 120px; height: 90px; border-radius: 8px; border: 2px dashed var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 24px; color: var(--muted); transition: border-color 0.15s; }
+.thumb-add:hover { border-color: var(--accent); color: var(--accent); }
+
+.analyze-btn { width: 100%; padding: 14px; border-radius: 10px; border: none; font-size: 15px; font-weight: 700; font-family: var(--mono); letter-spacing: 0.5px; margin-bottom: 24px; transition: all 0.2s; }
+.analyze-btn.ready { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; cursor: pointer; }
+.analyze-btn.disabled { background: rgba(255,255,255,0.05); color: var(--muted); cursor: not-allowed; }
+
+.error-box { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 10px; padding: 16px; margin-bottom: 20px; color: #fca5a5; font-size: 13px; }
+
+.results { display: flex; flex-direction: column; gap: 16px; }
+
+.direction-banner { border-radius: 12px; padding: 20px; text-align: center; }
+.direction-banner.long { background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(16,185,129,0.05)); border: 1px solid rgba(16,185,129,0.3); }
+.direction-banner.short { background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.05)); border: 1px solid rgba(239,68,68,0.3); }
+.direction-asset { font-size: 13px; color: #9ca3af; font-family: var(--mono); margin-bottom: 4px; }
+.direction-label { font-size: 36px; font-weight: 900; letter-spacing: 2px; }
+.direction-label.long { color: var(--green); }
+.direction-label.short { color: var(--red); }
+.direction-meta { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.meta-badge { background: rgba(255,255,255,0.06); border-radius: 20px; padding: 4px 14px; font-size: 12px; font-family: var(--mono); color: #d1d5db; }
+
+.sentiment-badge { display: inline-flex; align-items: center; gap: 8px; border-radius: 20px; padding: 6px 14px; }
+.sentiment-badge.BULLISH { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); }
+.sentiment-badge.BEARISH { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); }
+.sentiment-badge.MIXED { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); }
+.sentiment-badge.NEUTRAL { background: rgba(107,114,128,0.15); border: 1px solid rgba(107,114,128,0.3); }
+.sentiment-label { font-size: 13px; font-weight: 700; font-family: var(--mono); }
+.sentiment-badge.BULLISH .sentiment-label { color: var(--green); }
+.sentiment-badge.BEARISH .sentiment-label { color: var(--red); }
+.sentiment-badge.MIXED .sentiment-label { color: var(--yellow); }
+.sentiment-badge.NEUTRAL .sentiment-label { color: #9ca3af; }
+.sentiment-score { font-size: 12px; color: #9ca3af; font-family: var(--mono); }
+
+.tabs { display: flex; gap: 4px; background: var(--surface); border-radius: 10px; padding: 4px; border: 1px solid var(--border); }
+.tab-btn { flex: 1; padding: 10px; border-radius: 8px; border: none; background: transparent; color: #9ca3af; font-size: 13px; font-weight: 600; font-family: var(--mono); transition: all 0.15s; }
+.tab-btn.active { background: rgba(99,102,241,0.2); color: #a5b4fc; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.card-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.2px; font-family: var(--mono); margin-bottom: 8px; }
+.card-value { font-size: 18px; font-weight: 700; font-family: var(--mono); }
+.card-text { font-size: 13px; line-height: 1.6; color: #d1d5db; }
+.card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.card-full { grid-column: 1 / -1; }
+
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill { font-size: 12px; padding: 4px 10px; border-radius: 20px; font-family: var(--mono); }
+.pill.accent { background: rgba(99,102,241,0.15); color: #c7d2fe; border: 1px solid rgba(99,102,241,0.25); }
+.pill.green { background: rgba(16,185,129,0.15); color: #a7f3d0; border: 1px solid rgba(16,185,129,0.25); }
+.pill.yellow { background: rgba(245,158,11,0.15); color: #fde68a; border: 1px solid rgba(245,158,11,0.25); }
+
+.card.warning { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.2); }
+.card.warning .card-label { color: var(--yellow); }
+
+.headline-item { padding: 10px 12px; background: rgba(255,255,255,0.02); border-radius: 8px; border-left: 3px solid var(--muted); margin-bottom: 8px; }
+.headline-item:last-child { margin-bottom: 0; }
+.headline-item.BULLISH { border-left-color: var(--green); }
+.headline-item.BEARISH { border-left-color: var(--red); }
+.headline-title { font-size: 13px; color: #d1d5db; line-height: 1.5; margin-bottom: 6px; }
+.headline-meta { display: flex; gap: 8px; font-size: 10px; font-family: var(--mono); font-weight: 700; text-transform: uppercase; }
+.impact-tag.BULLISH { color: var(--green); }
+.impact-tag.BEARISH { color: var(--red); }
+.impact-tag.NEUTRAL { color: #9ca3af; }
+.sig-tag.HIGH { color: var(--yellow); }
+.sig-tag.MEDIUM { color: var(--muted); }
+.sig-tag.LOW { color: #3f3f46; }
+
+.disclaimer { font-size: 11px; color: #4b5563; text-align: center; padding: 12px 16px; line-height: 1.5; font-family: var(--mono); }
+
+.no-key-banner { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); border-radius: 10px; padding: 20px; text-align: center; margin-bottom: 16px; }
+.no-key-banner p { font-size: 13px; color: #fde68a; margin-bottom: 10px; }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo-group">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <div class="logo-title">ChartVision AI</div>
+      <div class="logo-sub">CHART + NEWS ANALYSIS ENGINE</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <span class="provider-badge" id="activeBadge">No Key</span>
+    <button class="settings-btn" onclick="openSettings()">⚙ Keys</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="no-key-banner" id="noKeyBanner">
+    <p>Add at least one API key to get started</p>
+    <button class="btn-primary" onclick="openSettings()">⚙ Configure API Keys</button>
+  </div>
+
+  <div class="provider-picker hidden" id="providerPicker"></div>
+
+  <div class="upload-zone" id="uploadZone"
+    onclick="if(!state.images.length)document.getElementById('fileInput').click()"
+    ondragover="event.preventDefault();this.classList.add('drag-over')"
+    ondragleave="this.classList.remove('drag-over')"
+    ondrop="handleDrop(event)">
+    <input type="file" accept="image/*" multiple id="fileInput" style="display:none" onchange="handleFiles(this.files)">
+    <div id="uploadEmpty">
+      <div class="upload-icon">📈</div>
+      <div class="upload-title">Drop chart screenshots here</div>
+      <div class="upload-hint">Upload one or multiple timeframes — any chart, any asset</div>
+    </div>
+    <div class="thumb-grid hidden" id="thumbGrid"></div>
+  </div>
+
+  <button class="analyze-btn disabled" id="analyzeBtn" onclick="runAnalysis()" disabled>⚡ ANALYZE</button>
+  <div class="error-box hidden" id="errorBox"></div>
+  <div class="results hidden" id="results"></div>
+</div>
+
+<div class="modal-overlay hidden" id="settingsModal" onclick="if(event.target===this)closeSettings()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>API Keys</h2>
+      <button class="modal-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#9ca3af;line-height:1.5;">Keys stay in your browser and are only sent directly to each provider's API. Add one or more — if you add multiple, you can pick which one to use.</p>
+
+      <div class="key-group">
+        <label class="key-label"><span class="provider-dot" style="background:#d97706;"></span> Anthropic (Claude)</label>
+        <div class="key-input-wrap">
+          <input class="key-input" type="password" id="key_anthropic" placeholder="sk-ant-..." autocomplete="off">
+          <button class="key-toggle" onclick="toggleVis('key_anthropic')">👁</button>
+        </div>
+        <span class="key-hint">Claude Sonnet 4 — best vision + live web search for news</span>
+        <span class="key-status unset" id="status_anthropic">Not set</span>
+      </div>
+
+      <div class="key-group">
+        <label class="key-label"><span class="provider-dot" style="background:#10b981;"></span> OpenAI (GPT-4o)</label>
+        <div class="key-input-wrap">
+          <input class="key-input" type="password" id="key_openai" placeholder="sk-..." autocomplete="off">
+          <button class="key-toggle" onclick="toggleVis('key_openai')">👁</button>
+        </div>
+        <span class="key-hint">GPT-4o — excellent multi-modal vision</span>
+        <span class="key-status unset" id="status_openai">Not set</span>
+      </div>
+
+      <div class="key-group">
+        <label class="key-label"><span class="provider-dot" style="background:#4285f4;"></span> Google Gemini</label>
+        <div class="key-input-wrap">
+          <input class="key-input" type="password" id="key_gemini" placeholder="AIza..." autocomplete="off">
+          <button class="key-toggle" onclick="toggleVis('key_gemini')">👁</button>
+        </div>
+        <span class="key-hint">Gemini 2.0 Flash — fast + generous free tier</span>
+        <span class="key-status unset" id="status_gemini">Not set</span>
+      </div>
+
+      <div class="key-group">
+        <label class="key-label"><span class="provider-dot" style="background:#fff;"></span> xAI (Grok)</label>
+        <div class="key-input-wrap">
+          <input class="key-input" type="password" id="key_xai" placeholder="xai-..." autocomplete="off">
+          <button class="key-toggle" onclick="toggleVis('key_xai')">👁</button>
+        </div>
+        <span class="key-hint">Grok Vision — OpenAI-compatible</span>
+        <span class="key-status unset" id="status_xai">Not set</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="clearAllKeys()">Clear All</button>
+      <button class="btn-primary" onclick="saveKeys()">Save Keys</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PROVIDERS = {
+  anthropic: { name: 'Claude Sonnet 4', color: '#d97706', hasWebSearch: true },
+  openai:    { name: 'GPT-4o',          color: '#10b981', hasWebSearch: true },
+  gemini:    { name: 'Gemini Flash',    color: '#4285f4', hasWebSearch: false },
+  xai:       { name: 'Grok Vision',     color: '#ffffff', hasWebSearch: false },
+};
+
+let state = {
+  images: [],
+  provider: null,
+  keys: { anthropic:'', openai:'', gemini:'', xai:'' },
+  analysis: null,
+  newsData: null,
+  loading: false,
+  activeTab: 'trade',
+};
+
+const TA_SYSTEM = `You are an elite technical analyst and professional trader with 25+ years of experience. You will be given one or more chart images (could be different timeframes of the same asset, or a single chart).
+
+Analyze with extreme precision. Study every candle, wick, volume bar, and indicator visible. Identify the asset/ticker from the chart itself.
+
+PATTERNS TO IDENTIFY:
+Reversal Bearish: Head & Shoulders, Double/Triple Top, Rising Wedge, Bearish Engulfing, Evening Star, Shooting Star, Hanging Man, Dark Cloud Cover, Bearish Harami, Three Black Crows, Tweezer Top.
+Reversal Bullish: Inverse H&S, Double/Triple Bottom, Falling Wedge, Bullish Engulfing, Morning Star, Hammer, Inverted Hammer, Piercing Line, Bullish Harami, Three White Soldiers, Tweezer Bottom.
+Continuation: Bull/Bear Flag, Bull/Bear Pennant, Ascending/Descending/Symmetrical Triangle, Cup & Handle, Rectangles.
+Candlestick: Doji variants (Dragonfly, Gravestone, Long-Legged), Spinning Top, Marubozu.
+
+ANALYZE ALL OF:
+- Support & Resistance (horizontal, psychological, polarity flips, volume profile)
+- Trend (HH/HL = up, LH/LL = down, equal = range, trendline touches)
+- Volume (confirmation, divergence, climactic spikes, dry-up)
+- Moving Averages if visible (20/50/100/200, golden/death cross, dynamic S/R)
+- Indicators if visible (RSI, MACD, Bollinger, Stochastic, Fibonacci, Ichimoku, VWAP, ATR)
+- Market Structure (BOS, ChoCh, Order Blocks, Fair Value Gaps, Liquidity Sweeps, Equal Highs/Lows)
+- Multi-Timeframe Confluence if multiple charts provided
+
+RESPOND IN THIS EXACT JSON (no markdown, no backticks, no other text):
+{"asset_detected":"string - read from chart","direction":"LONG or SHORT","confidence":1-10,"entry_price":"string","take_profit_1":"string - conservative","take_profit_2":"string - aggressive","stop_loss":"string","risk_reward_ratio":"string to TP1 and TP2","hold_duration":"string - estimated time","patterns_detected":["array with details"],"key_levels":{"support":["array"],"resistance":["array"]},"indicators_analysis":"string","volume_analysis":"string","trend_analysis":"string","market_structure":"string","confluence_factors":["array of reasons"],"warnings":["array of risks"],"summary":"string 2-3 sentences"}`;
+
+const NEWS_SYSTEM = `You are a financial news analyst. Search for and analyze the most recent news affecting the given asset. Respond ONLY in JSON (no markdown, no backticks):
+{"sentiment":"BULLISH/BEARISH/MIXED/NEUTRAL","sentiment_score":-10 to +10,"headlines":[{"title":"string in your own words","impact":"BULLISH/BEARISH/NEUTRAL","significance":"HIGH/MEDIUM/LOW"}],"catalysts":["array"],"macro_factors":"string","news_summary":"string 2-3 sentences"}`;
+
+function init() { loadKeys(); updateUI(); }
+
+function loadKeys() {
+  try {
+    const s = localStorage.getItem('cv_keys');
+    if (s) state.keys = JSON.parse(s);
+    const p = localStorage.getItem('cv_provider');
+    if (p && state.keys[p]) state.provider = p;
+  } catch(e) {}
+  autoSelectProvider();
+  fillKeyInputs();
+}
+
+function fillKeyInputs() {
+  ['anthropic','openai','gemini','xai'].forEach(p => {
+    document.getElementById('key_'+p).value = state.keys[p] || '';
+    const el = document.getElementById('status_'+p);
+    if (state.keys[p]) { el.textContent = '✓ Key saved'; el.className = 'key-status set'; }
+    else { el.textContent = 'Not set'; el.className = 'key-status unset'; }
+  });
+}
+
+function saveKeys() {
+  ['anthropic','openai','gemini','xai'].forEach(p => {
+    state.keys[p] = document.getElementById('key_'+p).value.trim();
+  });
+  localStorage.setItem('cv_keys', JSON.stringify(state.keys));
+  autoSelectProvider();
+  fillKeyInputs();
+  closeSettings();
+  updateUI();
+}
+
+function clearAllKeys() {
+  ['anthropic','openai','gemini','xai'].forEach(p => {
+    document.getElementById('key_'+p).value = '';
+    state.keys[p] = '';
+  });
+  localStorage.removeItem('cv_keys');
+  state.provider = null;
+  fillKeyInputs();
+  updateUI();
+}
+
+function autoSelectProvider() {
+  const available = Object.keys(PROVIDERS).filter(p => state.keys[p]);
+  if (available.length === 0) { state.provider = null; return; }
+  if (!state.provider || !state.keys[state.provider]) state.provider = available[0];
+  localStorage.setItem('cv_provider', state.provider);
+}
+
+function selectProvider(p) {
+  state.provider = p;
+  localStorage.setItem('cv_provider', p);
+  updateUI();
+}
+
+function toggleVis(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+function openSettings() { document.getElementById('settingsModal').classList.remove('hidden'); }
+function closeSettings() { document.getElementById('settingsModal').classList.add('hidden'); }
+
+function updateUI() {
+  const available = Object.keys(PROVIDERS).filter(p => state.keys[p]);
+  const hasKey = available.length > 0;
+  const hasImages = state.images.length > 0;
+
+  const badge = document.getElementById('activeBadge');
+  if (hasKey && state.provider) {
+    badge.textContent = PROVIDERS[state.provider].name;
+    badge.style.background = PROVIDERS[state.provider].color + '22';
+    badge.style.color = PROVIDERS[state.provider].color;
+  } else {
+    badge.textContent = 'No Key';
+    badge.style.background = 'rgba(239,68,68,0.15)';
+    badge.style.color = '#fca5a5';
+  }
+
+  document.getElementById('noKeyBanner').classList.toggle('hidden', hasKey);
+
+  const picker = document.getElementById('providerPicker');
+  if (available.length >= 2) {
+    picker.classList.remove('hidden');
+    picker.innerHTML = available.map(p =>
+      '<button class="provider-pick-btn '+(state.provider===p?'active':'')+'" onclick="selectProvider(\''+p+'\')">' +
+      '<span class="dot" style="background:'+PROVIDERS[p].color+'"></span>' +
+      PROVIDERS[p].name + '</button>'
+    ).join('');
+  } else { picker.classList.add('hidden'); }
+
+  const btn = document.getElementById('analyzeBtn');
+  const canGo = hasKey && hasImages && !state.loading;
+  btn.disabled = !canGo;
+  btn.className = 'analyze-btn ' + (canGo ? 'ready' : 'disabled');
+  if (!state.loading)
+    btn.textContent = '⚡ ANALYZE' + (hasImages ? ' ('+state.images.length+' IMAGE'+(state.images.length>1?'S':'')+')' : '');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('uploadZone').classList.remove('drag-over');
+  handleFiles(e.dataTransfer.files);
+}
+
+function handleFiles(files) {
+  Array.from(files).forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      state.images.push({ dataUrl: e.target.result, base64: e.target.result.split(',')[1], mediaType: file.type });
+      renderThumbs(); updateUI();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removeImage(i) { state.images.splice(i, 1); renderThumbs(); updateUI(); }
+
+function renderThumbs() {
+  const empty = document.getElementById('uploadEmpty');
+  const grid = document.getElementById('thumbGrid');
+  const zone = document.getElementById('uploadZone');
+  if (state.images.length === 0) {
+    empty.classList.remove('hidden'); grid.classList.add('hidden'); zone.classList.remove('has-images');
+    zone.onclick = () => document.getElementById('fileInput').click();
+    return;
+  }
+  empty.classList.add('hidden'); grid.classList.remove('hidden'); zone.classList.add('has-images');
+  zone.onclick = null;
+  grid.innerHTML = state.images.map((img, i) =>
+    '<div class="thumb-item"><img src="'+img.dataUrl+'" alt="Chart '+(i+1)+'">' +
+    '<button class="thumb-remove" onclick="event.stopPropagation();removeImage('+i+')">✕</button>' +
+    '<span class="thumb-index">'+(i+1)+'</span></div>'
+  ).join('') + '<div class="thumb-add" onclick="event.stopPropagation();document.getElementById(\'fileInput\').click()">+</div>';
+}
+
+async function callAnthropic(messages, system, tools) {
+  const body = { model: 'claude-sonnet-4-20250514', max_tokens: 4000, system, messages };
+  if (tools) body.tools = tools;
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json', 'x-api-key': state.keys.anthropic, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.content?.filter(b=>b.type==='text').map(b=>b.text).join('')||'';
+}
+
+async function callOpenAI(messages) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+state.keys.openai },
+    body: JSON.stringify({ model:'gpt-4o', max_tokens:4000, messages }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.choices?.[0]?.message?.content||'';
+}
+
+async function callGemini(contents) {
+  const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='+state.keys.gemini, {
+    method: 'POST', headers: { 'Content-Type':'application/json' },
+    body: JSON.stringify({ contents }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('')||'';
+}
+
+async function callXAI(messages) {
+  const res = await fetch('https://api.x.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+state.keys.xai },
+    body: JSON.stringify({ model:'grok-vision-beta', max_tokens:4000, messages }),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.choices?.[0]?.message?.content||'';
+}
+
+async function doChartAnalysis() {
+  const p = state.provider;
+  if (p === 'anthropic') {
+    const content = [];
+    state.images.forEach((img,i) => {
+      if (state.images.length > 1) content.push({ type:'text', text:'--- CHART '+(i+1)+' ---' });
+      content.push({ type:'image', source:{ type:'base64', media_type:img.mediaType, data:img.base64 } });
+    });
+    content.push({ type:'text', text:'Analyze these chart(s). Identify the asset from the chart. Respond ONLY with JSON.' });
+    return await callAnthropic([{ role:'user', content }], TA_SYSTEM);
+  }
+  if (p === 'openai' || p === 'xai') {
+    const content = [];
+    state.images.forEach((img,i) => {
+      if (state.images.length > 1) content.push({ type:'text', text:'--- CHART '+(i+1)+' ---' });
+      content.push({ type:'image_url', image_url:{ url:'data:'+img.mediaType+';base64,'+img.base64 } });
+    });
+    content.push({ type:'text', text:'Analyze these chart(s). Identify the asset from the chart. Respond ONLY with JSON.' });
+    const msgs = [{ role:'system', content:TA_SYSTEM }, { role:'user', content }];
+    return p === 'openai' ? await callOpenAI(msgs) : await callXAI(msgs);
+  }
+  if (p === 'gemini') {
+    const parts = [{ text: TA_SYSTEM }];
+    state.images.forEach((img,i) => {
+      if (state.images.length > 1) parts.push({ text:'--- CHART '+(i+1)+' ---' });
+      parts.push({ inline_data:{ mime_type:img.mediaType, data:img.base64 } });
+    });
+    parts.push({ text:'Analyze these chart(s). Identify the asset from the chart. Respond ONLY with JSON. No backticks.' });
+    return await callGemini([{ parts }]);
+  }
+}
+
+async function doNewsFetch(asset) {
+  const p = state.provider;
+  const q = 'Search for the latest news, headlines, and events for: '+asset+'. Find recent price-moving news, catalysts, macro factors. Respond ONLY in JSON.';
+  try {
+    let raw = '';
+    if (p === 'anthropic') raw = await callAnthropic([{role:'user',content:q}], NEWS_SYSTEM, [{type:'web_search_20250305',name:'web_search'}]);
+    else if (p === 'openai') raw = await callOpenAI([{role:'system',content:NEWS_SYSTEM},{role:'user',content:q}]);
+    else if (p === 'gemini') raw = await callGemini([{parts:[{text:NEWS_SYSTEM+'\n\n'+q}]}]);
+    else if (p === 'xai') raw = await callXAI([{role:'system',content:NEWS_SYSTEM},{role:'user',content:q}]);
+    const clean = raw.replace(/```json|```/g,'').trim();
+    const m = clean.match(/\{[\s\S]*\}/);
+    return m ? JSON.parse(m[0]) : null;
+  } catch(e) { console.error('News error:',e); return null; }
+}
+
+async function runAnalysis() {
+  if (state.loading || !state.images.length || !state.provider) return;
+  state.loading = true; state.analysis = null; state.newsData = null; state.activeTab = 'trade';
+  const btn = document.getElementById('analyzeBtn');
+  btn.textContent = '⏳ Reading chart patterns...'; btn.className = 'analyze-btn disabled'; btn.disabled = true;
+  document.getElementById('errorBox').classList.add('hidden');
+  document.getElementById('results').classList.add('hidden');
+  try {
+    const raw = await doChartAnalysis();
+    const clean = raw.replace(/```json|```/g,'').trim();
+    const m = clean.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('Could not parse analysis. Try again.');
+    state.analysis = JSON.parse(m[0]);
+    renderResults();
+    const asset = state.analysis.asset_detected;
+    if (asset && asset !== 'Unknown') {
+      btn.textContent = '⏳ Scanning news for ' + asset + '...';
+      state.newsData = await doNewsFetch(asset);
+      renderResults();
+    }
+  } catch(e) {
+    const box = document.getElementById('errorBox');
+    box.textContent = '⚠️ ' + (e.message||'Analysis failed.');
+    box.classList.remove('hidden');
+  } finally { state.loading = false; updateUI(); }
+}
+
+function renderResults() {
+  const el = document.getElementById('results');
+  const a = state.analysis; if (!a) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const isLong = a.direction === 'LONG'; const dir = isLong ? 'long' : 'short'; const n = state.newsData;
+  let sentHTML = '';
+  if (n) sentHTML = '<span class="sentiment-badge '+n.sentiment+'"><span class="sentiment-label">'+n.sentiment+'</span><span class="sentiment-score">'+(n.sentiment_score>0?'+':'')+n.sentiment_score+'/10</span></span>';
+  const newsLabel = n ? 'News ✓' : 'News';
+  el.innerHTML =
+    '<div class="direction-banner '+dir+'"><div class="direction-asset">'+(a.asset_detected||'CHART')+'</div>' +
+    '<div class="direction-label '+dir+'">'+a.direction+'</div>' +
+    '<div class="direction-meta"><span class="meta-badge">Confidence: '+a.confidence+'/10 • R:R '+a.risk_reward_ratio+'</span>'+sentHTML+'</div></div>' +
+    '<div class="tabs"><button class="tab-btn '+(state.activeTab==='trade'?'active':'')+'" onclick="switchTab(\'trade\')">Trade Setup</button>' +
+    '<button class="tab-btn '+(state.activeTab==='technicals'?'active':'')+'" onclick="switchTab(\'technicals\')">Technicals</button>' +
+    '<button class="tab-btn '+(state.activeTab==='news'?'active':'')+'" onclick="switchTab(\'news\')">'+newsLabel+'</button></div>' +
+    '<div id="tabContent">'+renderTab()+'</div>' +
+    '<div class="disclaimer">AI-generated analysis for educational purposes only. Not financial advice. Always DYOR and manage risk.</div>';
+}
+
+function switchTab(t) {
+  state.activeTab = t;
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', ['trade','technicals','news'][i]===t));
+  document.getElementById('tabContent').innerHTML = renderTab();
+}
+
+function renderTab() {
+  const a = state.analysis, n = state.newsData;
+  if (state.activeTab === 'trade') return (
+    '<div class="card-grid">' +
+    '<div class="card"><div class="card-label">Entry</div><div class="card-value">'+esc(a.entry_price)+'</div></div>' +
+    '<div class="card"><div class="card-label">Stop Loss</div><div class="card-value" style="color:var(--red)">'+esc(a.stop_loss)+'</div></div>' +
+    '<div class="card"><div class="card-label">Take Profit 1</div><div class="card-value" style="color:var(--green)">'+esc(a.take_profit_1)+'</div></div>' +
+    '<div class="card"><div class="card-label">Take Profit 2</div><div class="card-value" style="color:var(--green)">'+esc(a.take_profit_2)+'</div></div>' +
+    '<div class="card card-full"><div class="card-label">Hold Duration</div><div class="card-value" style="color:#a5b4fc">'+esc(a.hold_duration)+'</div></div></div>' +
+    '<div class="card"><div class="card-label">Summary</div><p class="card-text">'+esc(a.summary||'')+'</p></div>' +
+    (a.patterns_detected?.length?'<div class="card"><div class="card-label">Patterns Detected</div><div class="pills">'+a.patterns_detected.map(function(p){return '<span class="pill accent">'+esc(p)+'</span>'}).join('')+'</div></div>':'') +
+    (a.confluence_factors?.length?'<div class="card"><div class="card-label">Confluence Factors</div><div class="pills">'+a.confluence_factors.map(function(p){return '<span class="pill green">'+esc(p)+'</span>'}).join('')+'</div></div>':'') +
+    (a.warnings?.length?'<div class="card warning"><div class="card-label">⚠️ Warnings</div><div class="pills">'+a.warnings.map(function(p){return '<span class="pill yellow">'+esc(p)+'</span>'}).join('')+'</div></div>':'')
+  );
+  if (state.activeTab === 'technicals') return (
+    '<div class="card-grid">' +
+    '<div class="card"><div class="card-label" style="color:var(--green)">Support</div>'+(a.key_levels?.support||[]).map(function(s){return '<div style="font:14px var(--mono);color:#d1d5db;padding:3px 0">'+esc(s)+'</div>'}).join('')+'</div>' +
+    '<div class="card"><div class="card-label" style="color:var(--red)">Resistance</div>'+(a.key_levels?.resistance||[]).map(function(s){return '<div style="font:14px var(--mono);color:#d1d5db;padding:3px 0">'+esc(s)+'</div>'}).join('')+'</div></div>' +
+    [{l:'Trend Analysis',v:a.trend_analysis},{l:'Volume Analysis',v:a.volume_analysis},{l:'Indicators',v:a.indicators_analysis},{l:'Market Structure',v:a.market_structure}].filter(function(x){return x.v}).map(function(x){return '<div class="card"><div class="card-label">'+x.l+'</div><p class="card-text">'+esc(x.v)+'</p></div>'}).join('')
+  );
+  if (state.activeTab === 'news') {
+    if (!n) return '<div class="card" style="text-align:center"><p class="card-text">'+(PROVIDERS[state.provider]?.hasWebSearch?'News will be fetched automatically after chart analysis detects the asset.':'This provider has limited news capability. Try Anthropic for live web search.')+'</p></div>';
+    return (
+      '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">' +
+      '<div class="card-label" style="margin:0">News Sentiment</div>' +
+      '<span class="sentiment-badge '+n.sentiment+'"><span class="sentiment-label">'+n.sentiment+'</span><span class="sentiment-score">'+(n.sentiment_score>0?'+':'')+n.sentiment_score+'/10</span></span></div>' +
+      '<p class="card-text">'+esc(n.news_summary||'')+'</p></div>' +
+      (n.headlines?.length?'<div class="card"><div class="card-label">Headlines</div>'+n.headlines.map(function(h){return '<div class="headline-item '+h.impact+'"><div class="headline-title">'+esc(h.title)+'</div><div class="headline-meta"><span class="impact-tag '+h.impact+'">'+h.impact+'</span><span class="sig-tag '+h.significance+'">● '+h.significance+'</span></div></div>'}).join('')+'</div>':'') +
+      (n.catalysts?.length?'<div class="card"><div class="card-label">Upcoming Catalysts</div><div class="pills">'+n.catalysts.map(function(c){return '<span class="pill yellow">'+esc(c)+'</span>'}).join('')+'</div></div>':'') +
+      (n.macro_factors?'<div class="card"><div class="card-label">Macro Environment</div><p class="card-text">'+esc(n.macro_factors)+'</p></div>':'')
+    );
+  }
+  return '';
+}
+
+function esc(s) { var d=document.createElement('div'); d.textContent=String(s); return d.innerHTML; }
+
+init();
+</script>
+</body>
+</html>
