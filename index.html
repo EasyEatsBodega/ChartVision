@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ChartVision AI</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --bg: #09090b; --surface: rgba(255,255,255,0.03); --border: rgba(255,255,255,0.06);
@@ -144,6 +145,22 @@ input, select { font-family: inherit; }
 .no-key-banner p { font-size: 13px; color: #fde68a; margin-bottom: 10px; }
 
 .hidden { display: none !important; }
+
+.auth-btn { background: #fff; color: #1f2937; border: none; border-radius: 8px; padding: 10px 18px; font-size: 13px; font-weight: 600; font-family: var(--sans); cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.15s; }
+.auth-btn:hover { background: #e5e7eb; }
+.auth-btn svg { width: 16px; height: 16px; }
+.user-menu { display: flex; align-items: center; gap: 10px; }
+.user-avatar { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--border); }
+.user-email { font-size: 12px; color: var(--muted); font-family: var(--mono); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.signout-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.signout-btn:hover { color: var(--red); border-color: rgba(239,68,68,0.3); }
+.auth-banner { background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 10px; padding: 24px; text-align: center; margin-bottom: 16px; }
+.auth-banner p { font-size: 14px; color: #c7d2fe; margin-bottom: 6px; }
+.auth-banner .sub { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+.auth-banner .auth-btn { margin: 0 auto; }
+.guest-link { font-size: 11px; color: var(--muted); margin-top: 12px; cursor: pointer; text-decoration: underline; }
+.guest-link:hover { color: var(--text); }
+.auth-loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--muted); font-size: 13px; font-family: var(--mono); }
 </style>
 </head>
 <body>
@@ -157,13 +174,65 @@ input, select { font-family: inherit; }
     </div>
   </div>
   <div class="header-actions">
-    <span class="provider-badge" id="activeBadge">No Key</span>
-    <button class="settings-btn" onclick="openSettings()">⚙ Keys</button>
+    <div id="authHeaderLoading" class="hidden" style="color:var(--muted);font-size:12px;font-family:var(--mono);">Loading...</div>
+    <div id="authHeaderSignedOut" class="hidden">
+      <button class="auth-btn" onclick="showAuthModal()">Sign in</button>
+    </div>
+    <div id="authHeaderSignedIn" class="hidden user-menu">
+      <span id="userEmail" class="user-email"></span>
+      <button class="settings-btn" onclick="openSettings()">⚙ Keys</button>
+      <button class="signout-btn" onclick="doSignOut()">Sign out</button>
+    </div>
+    <div id="authHeaderGuest" class="hidden">
+      <span class="provider-badge" id="activeBadge">No Key</span>
+      <button class="settings-btn" onclick="openSettings()">⚙ Keys</button>
+    </div>
   </div>
 </div>
 
 <div class="main">
-  <div class="no-key-banner" id="noKeyBanner">
+  <div id="authLoading" class="auth-loading">Checking session...</div>
+
+  <div class="auth-banner hidden" id="authBanner">
+    <p>Sign in to save your API keys across devices</p>
+    <div class="sub">Keys are stored securely. Never shared.</div>
+    <button class="auth-btn" onclick="showAuthModal()" style="margin:0 auto;">Sign in / Sign up</button>
+    <div class="guest-link" onclick="enterGuestMode()">Continue without signing in</div>
+  </div>
+
+  <!-- Auth Modal -->
+  <div class="modal-overlay hidden" id="authModal" onclick="if(event.target===this)closeAuthModal()">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="authModalTitle">Sign In</h2>
+        <button class="modal-close" onclick="closeAuthModal()">&#10005;</button>
+      </div>
+      <div class="modal-body">
+        <div id="authError" class="error-box hidden"></div>
+        <div id="authSuccess" class="hidden" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:16px;color:#a7f3d0;font-size:13px;"></div>
+        <div class="key-group">
+          <label class="key-label">Email</label>
+          <input class="key-input" type="email" id="authEmail" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="key-group">
+          <label class="key-label">Password</label>
+          <div class="key-input-wrap">
+            <input class="key-input" type="password" id="authPassword" placeholder="Min 6 characters" autocomplete="current-password">
+            <button class="key-toggle" onclick="toggleVis('authPassword')">&#128065;</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="flex-direction:column;gap:10px;">
+        <button class="btn-primary" id="authSubmitBtn" onclick="handleAuth()" style="width:100%;padding:12px;">Sign In</button>
+        <div style="text-align:center;font-size:12px;color:var(--muted);">
+          <span id="authToggleText">Don't have an account?</span>
+          <span style="color:#a5b4fc;cursor:pointer;font-weight:600;" onclick="toggleAuthMode()" id="authToggleLink">Sign up</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="no-key-banner hidden" id="noKeyBanner">
     <p>Add at least one API key to get started</p>
     <button class="btn-primary" onclick="openSettings()">⚙ Configure API Keys</button>
   </div>
@@ -246,6 +315,12 @@ input, select { font-family: inherit; }
 </div>
 
 <script>
+// ── Supabase Config ──
+// TODO: Replace these with your Supabase project credentials
+const SUPABASE_URL = 'https://pcfddjwdeucsatxkxdxf.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBjZmRkandkZXVjc2F0eGt4ZHhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMzU4MTUsImV4cCI6MjA5MTcxMTgxNX0.cQ3mDLMLfN0sDMhTHwdP2jZje2N_y3ZiFWMFDs9XCyk';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 const PROVIDERS = {
   anthropic: { name: 'Claude Sonnet 4', color: '#d97706', hasWebSearch: true },
   openai:    { name: 'GPT-4o',          color: '#10b981', hasWebSearch: true },
@@ -261,6 +336,8 @@ let state = {
   newsData: null,
   loading: false,
   activeTab: 'trade',
+  user: null,
+  guestMode: false,
 };
 
 const TA_SYSTEM = `You are an elite technical analyst and professional trader with 25+ years of experience. You will be given one or more chart images (could be different timeframes of the same asset, or a single chart).
@@ -288,9 +365,157 @@ RESPOND IN THIS EXACT JSON (no markdown, no backticks, no other text):
 const NEWS_SYSTEM = `You are a financial news analyst. Search for and analyze the most recent news affecting the given asset. Respond ONLY in JSON (no markdown, no backticks):
 {"sentiment":"BULLISH/BEARISH/MIXED/NEUTRAL","sentiment_score":-10 to +10,"headlines":[{"title":"string in your own words","impact":"BULLISH/BEARISH/NEUTRAL","significance":"HIGH/MEDIUM/LOW"}],"catalysts":["array"],"macro_factors":"string","news_summary":"string 2-3 sentences"}`;
 
-function init() { loadKeys(); updateUI(); }
+// ── Auth Functions ──
+async function init() {
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    state.user = session?.user || null;
+    if (state.user) {
+      state.guestMode = false;
+      await loadKeysFromDB();
+    }
+    updateAuthUI();
+    updateUI();
+  });
+  const { data: { session } } = await supabase.auth.getSession();
+  state.user = session?.user || null;
+  if (state.user) {
+    await loadKeysFromDB();
+  } else {
+    loadKeysFromLocal();
+  }
+  document.getElementById('authLoading').classList.add('hidden');
+  updateAuthUI();
+  updateUI();
+}
 
-function loadKeys() {
+let authMode = 'signin'; // 'signin' or 'signup'
+
+function showAuthModal() {
+  authMode = 'signin';
+  document.getElementById('authModal').classList.remove('hidden');
+  document.getElementById('authError').classList.add('hidden');
+  document.getElementById('authSuccess').classList.add('hidden');
+  document.getElementById('authEmail').value = '';
+  document.getElementById('authPassword').value = '';
+  updateAuthModalUI();
+  document.getElementById('authEmail').focus();
+}
+
+function closeAuthModal() { document.getElementById('authModal').classList.add('hidden'); }
+
+function toggleAuthMode() {
+  authMode = authMode === 'signin' ? 'signup' : 'signin';
+  document.getElementById('authError').classList.add('hidden');
+  document.getElementById('authSuccess').classList.add('hidden');
+  updateAuthModalUI();
+}
+
+function updateAuthModalUI() {
+  document.getElementById('authModalTitle').textContent = authMode === 'signin' ? 'Sign In' : 'Sign Up';
+  document.getElementById('authSubmitBtn').textContent = authMode === 'signin' ? 'Sign In' : 'Create Account';
+  document.getElementById('authToggleText').textContent = authMode === 'signin' ? "Don't have an account?" : 'Already have an account?';
+  document.getElementById('authToggleLink').textContent = authMode === 'signin' ? 'Sign up' : 'Sign in';
+}
+
+async function handleAuth() {
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const errBox = document.getElementById('authError');
+  const successBox = document.getElementById('authSuccess');
+  errBox.classList.add('hidden');
+  successBox.classList.add('hidden');
+
+  if (!email || !password) { errBox.textContent = 'Enter both email and password.'; errBox.classList.remove('hidden'); return; }
+  if (password.length < 6) { errBox.textContent = 'Password must be at least 6 characters.'; errBox.classList.remove('hidden'); return; }
+
+  const btn = document.getElementById('authSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Loading...';
+
+  try {
+    if (authMode === 'signup') {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) throw error;
+      if (data.user && !data.session) {
+        successBox.textContent = 'Check your email for a confirmation link, then sign in.';
+        successBox.classList.remove('hidden');
+      } else {
+        closeAuthModal();
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      closeAuthModal();
+    }
+  } catch(e) {
+    errBox.textContent = e.message || 'Authentication failed.';
+    errBox.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    updateAuthModalUI();
+  }
+}
+
+async function doSignOut() {
+  await supabase.auth.signOut();
+  state.user = null;
+  state.keys = { anthropic:'', openai:'', gemini:'', xai:'' };
+  state.provider = null;
+  state.guestMode = false;
+  updateAuthUI();
+  updateUI();
+}
+
+function enterGuestMode() {
+  state.guestMode = true;
+  loadKeysFromLocal();
+  document.getElementById('authLoading').classList.add('hidden');
+  updateAuthUI();
+  updateUI();
+}
+
+function updateAuthUI() {
+  const loading = document.getElementById('authHeaderLoading');
+  const signedOut = document.getElementById('authHeaderSignedOut');
+  const signedIn = document.getElementById('authHeaderSignedIn');
+  const guest = document.getElementById('authHeaderGuest');
+  const authBanner = document.getElementById('authBanner');
+
+  [loading, signedOut, signedIn, guest].forEach(el => el.classList.add('hidden'));
+  authBanner.classList.add('hidden');
+
+  if (state.user) {
+    signedIn.classList.remove('hidden');
+    document.getElementById('userEmail').textContent = state.user.email || '';
+  } else if (state.guestMode) {
+    guest.classList.remove('hidden');
+  } else {
+    signedOut.classList.remove('hidden');
+    authBanner.classList.remove('hidden');
+  }
+}
+
+// ── Key Storage ──
+async function loadKeysFromDB() {
+  try {
+    const { data, error } = await supabase
+      .from('user_keys')
+      .select('anthropic, openai, gemini, xai')
+      .eq('user_id', state.user.id)
+      .single();
+    if (data) {
+      state.keys = {
+        anthropic: data.anthropic || '',
+        openai: data.openai || '',
+        gemini: data.gemini || '',
+        xai: data.xai || '',
+      };
+    }
+  } catch(e) { console.error('Load keys error:', e); }
+  autoSelectProvider();
+  fillKeyInputs();
+}
+
+function loadKeysFromLocal() {
   try {
     const s = localStorage.getItem('cv_keys');
     if (s) state.keys = JSON.parse(s);
@@ -303,30 +528,56 @@ function loadKeys() {
 
 function fillKeyInputs() {
   ['anthropic','openai','gemini','xai'].forEach(p => {
-    document.getElementById('key_'+p).value = state.keys[p] || '';
+    const input = document.getElementById('key_'+p);
+    if (input) input.value = state.keys[p] || '';
     const el = document.getElementById('status_'+p);
-    if (state.keys[p]) { el.textContent = '✓ Key saved'; el.className = 'key-status set'; }
-    else { el.textContent = 'Not set'; el.className = 'key-status unset'; }
+    if (el) {
+      if (state.keys[p]) { el.textContent = '✓ Key saved'; el.className = 'key-status set'; }
+      else { el.textContent = 'Not set'; el.className = 'key-status unset'; }
+    }
   });
 }
 
-function saveKeys() {
+async function saveKeys() {
   ['anthropic','openai','gemini','xai'].forEach(p => {
     state.keys[p] = document.getElementById('key_'+p).value.trim();
   });
+  // Always save to localStorage as fallback
   localStorage.setItem('cv_keys', JSON.stringify(state.keys));
+  // If logged in, also save to Supabase
+  if (state.user) {
+    try {
+      await supabase.from('user_keys').upsert({
+        user_id: state.user.id,
+        anthropic: state.keys.anthropic,
+        openai: state.keys.openai,
+        gemini: state.keys.gemini,
+        xai: state.keys.xai,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+    } catch(e) { console.error('Save keys error:', e); }
+  }
   autoSelectProvider();
   fillKeyInputs();
   closeSettings();
   updateUI();
 }
 
-function clearAllKeys() {
+async function clearAllKeys() {
   ['anthropic','openai','gemini','xai'].forEach(p => {
     document.getElementById('key_'+p).value = '';
     state.keys[p] = '';
   });
   localStorage.removeItem('cv_keys');
+  if (state.user) {
+    try {
+      await supabase.from('user_keys').upsert({
+        user_id: state.user.id,
+        anthropic: '', openai: '', gemini: '', xai: '',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+    } catch(e) { console.error('Clear keys error:', e); }
+  }
   state.provider = null;
   fillKeyInputs();
   updateUI();
@@ -356,22 +607,28 @@ function updateUI() {
   const available = Object.keys(PROVIDERS).filter(p => state.keys[p]);
   const hasKey = available.length > 0;
   const hasImages = state.images.length > 0;
+  const appActive = state.user || state.guestMode;
 
+  // Guest mode badge
   const badge = document.getElementById('activeBadge');
-  if (hasKey && state.provider) {
-    badge.textContent = PROVIDERS[state.provider].name;
-    badge.style.background = PROVIDERS[state.provider].color + '22';
-    badge.style.color = PROVIDERS[state.provider].color;
-  } else {
-    badge.textContent = 'No Key';
-    badge.style.background = 'rgba(239,68,68,0.15)';
-    badge.style.color = '#fca5a5';
+  if (badge) {
+    if (hasKey && state.provider) {
+      badge.textContent = PROVIDERS[state.provider].name;
+      badge.style.background = PROVIDERS[state.provider].color + '22';
+      badge.style.color = PROVIDERS[state.provider].color;
+    } else {
+      badge.textContent = 'No Key';
+      badge.style.background = 'rgba(239,68,68,0.15)';
+      badge.style.color = '#fca5a5';
+    }
   }
 
-  document.getElementById('noKeyBanner').classList.toggle('hidden', hasKey);
+  // Show/hide app sections based on auth state
+  const noKeyBanner = document.getElementById('noKeyBanner');
+  noKeyBanner.classList.toggle('hidden', !appActive || hasKey);
 
   const picker = document.getElementById('providerPicker');
-  if (available.length >= 2) {
+  if (appActive && available.length >= 2) {
     picker.classList.remove('hidden');
     picker.innerHTML = available.map(p =>
       '<button class="provider-pick-btn '+(state.provider===p?'active':'')+'" onclick="selectProvider(\''+p+'\')">' +
@@ -379,6 +636,10 @@ function updateUI() {
       PROVIDERS[p].name + '</button>'
     ).join('');
   } else { picker.classList.add('hidden'); }
+
+  // Hide upload + analyze when not in app mode
+  document.getElementById('uploadZone').classList.toggle('hidden', !appActive);
+  document.getElementById('analyzeBtn').classList.toggle('hidden', !appActive);
 
   const btn = document.getElementById('analyzeBtn');
   const canGo = hasKey && hasImages && !state.loading;
