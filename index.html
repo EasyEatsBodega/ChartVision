@@ -183,6 +183,19 @@ input, select { font-family: inherit; }
 .ladder-rr { display: flex; justify-content: center; gap: 16px; margin-top: 14px; }
 .ladder-rr-item { font-size: 11px; font-family: var(--mono); color: var(--muted); }
 .ladder-rr-item span { font-weight: 700; }
+
+.history-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+.history-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; }
+.history-item:hover { border-color: rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); }
+.history-thumb { width: 56px; height: 42px; border-radius: 6px; object-fit: cover; border: 1px solid var(--border); flex-shrink: 0; }
+.history-info { flex: 1; min-width: 0; }
+.history-asset { font-size: 14px; font-weight: 700; font-family: var(--mono); }
+.history-meta { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+.history-dir { font-size: 12px; font-weight: 800; font-family: var(--mono); padding: 3px 10px; border-radius: 12px; flex-shrink: 0; }
+.history-dir.long { color: var(--green); background: rgba(16,185,129,0.12); }
+.history-dir.short { color: var(--red); background: rgba(239,68,68,0.12); }
+.history-delete { background: none; border: none; color: #4b5563; font-size: 14px; padding: 4px; cursor: pointer; flex-shrink: 0; }
+.history-delete:hover { color: var(--red); }
 </style>
 </head>
 <body>
@@ -278,6 +291,14 @@ input, select { font-family: inherit; }
   <button class="analyze-btn disabled hidden" id="analyzeBtn" onclick="runAnalysis()" disabled>⚡ ANALYZE</button>
   <div class="error-box hidden" id="errorBox"></div>
   <div class="results hidden" id="results"></div>
+
+  <div class="history-section hidden" id="historySection">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="card-label" style="margin:0;font-size:13px;">Past Scans</div>
+      <button class="signout-btn" onclick="clearHistory()" style="font-size:10px;">Clear All</button>
+    </div>
+    <div id="historyList"></div>
+  </div>
 </div>
 
 <div class="modal-overlay hidden" id="settingsModal" onclick="if(event.target===this)closeSettings()">
@@ -361,6 +382,7 @@ let state = {
   activeTab: 'trade',
   user: null,
   guestMode: false,
+  history: [],
 };
 
 const TA_SYSTEM = `You are an elite technical analyst and professional trader with 25+ years of experience. You will be given one or more chart images (could be different timeframes of the same asset, or a single chart).
@@ -415,6 +437,7 @@ async function init() {
   document.getElementById('authLoading').classList.add('hidden');
   updateAuthUI();
   updateUI();
+  loadHistory();
 }
 
 let authMode = 'signin'; // 'signin' or 'signup'
@@ -828,6 +851,9 @@ async function runAnalysis() {
       state.newsData = await doNewsFetch(asset);
       renderResults();
     }
+    // Save to history
+    const thumb = state.images.length ? state.images[0].dataUrl : '';
+    await saveToHistory(state.analysis, state.newsData, thumb);
   } catch(e) {
     const box = document.getElementById('errorBox');
     box.textContent = '⚠️ ' + (e.message||'Analysis failed.');
@@ -953,6 +979,103 @@ function renderPriceLadder(a) {
   html += '<div class="ladder-rr"><div class="ladder-rr-item">R:R to TP1 <span class="level-tp1">1:'+rr1+'</span></div>';
   html += '<div class="ladder-rr-item">R:R to TP2 <span class="level-tp2">1:'+rr2+'</span></div></div></div>';
   return html;
+}
+
+// ── Scan History ──
+async function saveToHistory(analysis, newsData, thumbnail) {
+  const entry = {
+    id: crypto.randomUUID(),
+    asset: analysis.asset_detected || 'Unknown',
+    direction: analysis.direction,
+    confidence: analysis.confidence,
+    analysis: analysis,
+    news: newsData,
+    thumbnail: thumbnail,
+    created_at: new Date().toISOString(),
+  };
+  // Save to localStorage
+  state.history.unshift(entry);
+  if (state.history.length > 50) state.history = state.history.slice(0, 50);
+  localStorage.setItem('cv_history', JSON.stringify(state.history));
+  // Save to Supabase if logged in
+  if (state.user && sb) {
+    try {
+      await sb.from('scan_history').insert({
+        user_id: state.user.id,
+        asset: entry.asset,
+        direction: entry.direction,
+        confidence: entry.confidence,
+        analysis: entry.analysis,
+        news: entry.news,
+        thumbnail: entry.thumbnail,
+      });
+    } catch(e) { console.error('Save history error:', e); }
+  }
+  renderHistory();
+}
+
+async function loadHistory() {
+  if (state.user && sb) {
+    try {
+      const { data } = await sb.from('scan_history')
+        .select('*').eq('user_id', state.user.id)
+        .order('created_at', { ascending: false }).limit(50);
+      if (data && data.length) { state.history = data; renderHistory(); return; }
+    } catch(e) { console.error('Load history error:', e); }
+  }
+  try {
+    const stored = localStorage.getItem('cv_history');
+    if (stored) state.history = JSON.parse(stored);
+  } catch(e) {}
+  renderHistory();
+}
+
+function renderHistory() {
+  const section = document.getElementById('historySection');
+  const list = document.getElementById('historyList');
+  if (!state.history.length) { section.classList.add('hidden'); return; }
+  const appActive = state.user || state.guestMode;
+  if (!appActive) { section.classList.add('hidden'); return; }
+  section.classList.remove('hidden');
+  list.innerHTML = state.history.map((h, i) => {
+    const dir = (h.direction||'').toLowerCase();
+    const date = new Date(h.created_at).toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    const thumbHtml = h.thumbnail ? '<img class="history-thumb" src="'+h.thumbnail+'" alt="">' : '';
+    return '<div class="history-item" onclick="loadScan('+i+')">' +
+      thumbHtml +
+      '<div class="history-info"><div class="history-asset">'+esc(h.asset)+'</div>' +
+      '<div class="history-meta">'+date+' · Confidence: '+h.confidence+'/10</div></div>' +
+      '<span class="history-dir '+dir+'">'+esc(h.direction)+'</span>' +
+      '<button class="history-delete" onclick="event.stopPropagation();deleteScan('+i+')" title="Delete">✕</button></div>';
+  }).join('');
+}
+
+function loadScan(i) {
+  const h = state.history[i];
+  if (!h) return;
+  state.analysis = h.analysis;
+  state.newsData = h.news || null;
+  state.activeTab = 'trade';
+  renderResults();
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function deleteScan(i) {
+  const removed = state.history.splice(i, 1)[0];
+  localStorage.setItem('cv_history', JSON.stringify(state.history));
+  if (state.user && sb && removed.id) {
+    try { await sb.from('scan_history').delete().eq('id', removed.id); } catch(e) {}
+  }
+  renderHistory();
+}
+
+async function clearHistory() {
+  state.history = [];
+  localStorage.removeItem('cv_history');
+  if (state.user && sb) {
+    try { await sb.from('scan_history').delete().eq('user_id', state.user.id); } catch(e) {}
+  }
+  renderHistory();
 }
 
 function esc(s) { var d=document.createElement('div'); d.textContent=String(s); return d.innerHTML; }
