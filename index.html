@@ -239,7 +239,7 @@ input, select { font-family: inherit; }
 
   <div class="provider-picker hidden" id="providerPicker"></div>
 
-  <div class="upload-zone" id="uploadZone"
+  <div class="upload-zone hidden" id="uploadZone"
     onclick="if(!state.images.length)document.getElementById('fileInput').click()"
     ondragover="event.preventDefault();this.classList.add('drag-over')"
     ondragleave="this.classList.remove('drag-over')"
@@ -253,7 +253,7 @@ input, select { font-family: inherit; }
     <div class="thumb-grid hidden" id="thumbGrid"></div>
   </div>
 
-  <button class="analyze-btn disabled" id="analyzeBtn" onclick="runAnalysis()" disabled>⚡ ANALYZE</button>
+  <button class="analyze-btn disabled hidden" id="analyzeBtn" onclick="runAnalysis()" disabled>⚡ ANALYZE</button>
   <div class="error-box hidden" id="errorBox"></div>
   <div class="results hidden" id="results"></div>
 </div>
@@ -367,20 +367,25 @@ const NEWS_SYSTEM = `You are a financial news analyst. Search for and analyze th
 
 // ── Auth Functions ──
 async function init() {
-  supabase.auth.onAuthStateChange(async (event, session) => {
+  try {
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      state.user = session?.user || null;
+      if (state.user) {
+        state.guestMode = false;
+        await loadKeysFromDB();
+      }
+      updateAuthUI();
+      updateUI();
+    });
+    const { data: { session } } = await supabase.auth.getSession();
     state.user = session?.user || null;
     if (state.user) {
-      state.guestMode = false;
       await loadKeysFromDB();
+    } else {
+      loadKeysFromLocal();
     }
-    updateAuthUI();
-    updateUI();
-  });
-  const { data: { session } } = await supabase.auth.getSession();
-  state.user = session?.user || null;
-  if (state.user) {
-    await loadKeysFromDB();
-  } else {
+  } catch(e) {
+    console.error('Init error:', e);
     loadKeysFromLocal();
   }
   document.getElementById('authLoading').classList.add('hidden');
