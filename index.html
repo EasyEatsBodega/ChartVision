@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ChartVision AI</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root {
   --bg: #09090b; --surface: rgba(255,255,255,0.03); --border: rgba(255,255,255,0.06);
@@ -380,7 +380,14 @@ input, select { font-family: inherit; }
 const SUPABASE_URL = 'https://pcfddjwdeucsatxkxdxf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBjZmRkandkZXVjc2F0eGt4ZHhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMzU4MTUsImV4cCI6MjA5MTcxMTgxNX0.cQ3mDLMLfN0sDMhTHwdP2jZje2N_y3ZiFWMFDs9XCyk';
 let sb = null;
-try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { console.error('Supabase init failed:', e); }
+try {
+  if (window.supabase && window.supabase.createClient) {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('Supabase client initialized');
+  } else {
+    console.warn('Supabase library not loaded — window.supabase is', typeof window.supabase);
+  }
+} catch(e) { console.error('Supabase init failed:', e); }
 
 const PROVIDERS = {
   anthropic: { name: 'Claude Sonnet 4', color: '#d97706', hasWebSearch: true },
@@ -430,7 +437,7 @@ const NEWS_SYSTEM = `You are a financial news analyst. Search for and analyze th
 
 // ── Auth Functions ──
 async function init() {
-  if (!sb) { enterGuestMode(); document.getElementById('authLoading').classList.add('hidden'); return; }
+  if (!sb) { enterGuestMode(); document.getElementById('authLoading').classList.add('hidden'); loadHistory(); return; }
   try {
     sb.auth.onAuthStateChange(async (event, session) => {
       state.user = session?.user || null;
