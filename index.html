@@ -161,6 +161,28 @@ input, select { font-family: inherit; }
 .guest-link { font-size: 11px; color: var(--muted); margin-top: 12px; cursor: pointer; text-decoration: underline; }
 .guest-link:hover { color: var(--text); }
 .auth-loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--muted); font-size: 13px; font-family: var(--mono); }
+
+.price-ladder { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px 20px; margin-bottom: 8px; }
+.price-ladder-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.2px; font-family: var(--mono); margin-bottom: 16px; }
+.ladder-container { position: relative; height: 240px; margin: 0 70px 0 50px; }
+.ladder-track { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: var(--border); transform: translateX(-50%); }
+.ladder-zone { position: absolute; left: 10%; right: 10%; border-radius: 4px; }
+.ladder-zone.profit { background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.1); }
+.ladder-zone.risk { background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.1); }
+.ladder-level { position: absolute; left: 0; right: 0; display: flex; align-items: center; height: 0; }
+.ladder-label { position: absolute; left: -50px; width: 44px; text-align: right; font-size: 10px; font-family: var(--mono); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.ladder-line { flex: 1; height: 2px; }
+.ladder-line.solid { background: currentColor; }
+.ladder-line.dashed { background: repeating-linear-gradient(90deg, currentColor 0, currentColor 8px, transparent 8px, transparent 14px); height: 2px; }
+.ladder-price { position: absolute; right: -70px; width: 66px; font-size: 12px; font-family: var(--mono); font-weight: 600; }
+.ladder-pct { position: absolute; right: -70px; top: 12px; width: 66px; font-size: 10px; font-family: var(--mono); }
+.level-tp2 { color: var(--green); }
+.level-tp1 { color: var(--green); }
+.level-entry { color: #a5b4fc; }
+.level-sl { color: var(--red); }
+.ladder-rr { display: flex; justify-content: center; gap: 16px; margin-top: 14px; }
+.ladder-rr-item { font-size: 11px; font-family: var(--mono); color: var(--muted); }
+.ladder-rr-item span { font-weight: 700; }
 </style>
 </head>
 <body>
@@ -841,6 +863,7 @@ function switchTab(t) {
 function renderTab() {
   const a = state.analysis, n = state.newsData;
   if (state.activeTab === 'trade') return (
+    renderPriceLadder(a) +
     '<div class="card-grid">' +
     '<div class="card"><div class="card-label">Entry</div><div class="card-value">'+esc(a.entry_price)+'</div></div>' +
     '<div class="card"><div class="card-label">Stop Loss</div><div class="card-value" style="color:var(--red)">'+esc(a.stop_loss)+'</div></div>' +
@@ -871,6 +894,65 @@ function renderTab() {
     );
   }
   return '';
+}
+
+function renderPriceLadder(a) {
+  const parse = s => parseFloat(String(s).replace(/[^0-9.\-]/g,''));
+  const entry = parse(a.entry_price), sl = parse(a.stop_loss), tp1 = parse(a.take_profit_1), tp2 = parse(a.take_profit_2);
+  if ([entry,sl,tp1,tp2].some(v => isNaN(v))) return '';
+
+  const levels = [
+    { key:'sl', label:'SL', price:sl, cls:'level-sl', line:'dashed' },
+    { key:'entry', label:'ENTRY', price:entry, cls:'level-entry', line:'solid' },
+    { key:'tp1', label:'TP1', price:tp1, cls:'level-tp1', line:'dashed' },
+    { key:'tp2', label:'TP2', price:tp2, cls:'level-tp2', line:'dashed' },
+  ].sort((a,b) => a.price - b.price);
+
+  const min = levels[0].price, max = levels[levels.length-1].price;
+  const range = max - min || 1;
+  const pad = range * 0.08;
+  const fullMin = min - pad, fullMax = max + pad, fullRange = fullMax - fullMin;
+  const pct = p => ((p - fullMin) / fullRange * 100);
+
+  // Zones
+  const entryPct = pct(entry), slPct = pct(sl), tp1Pct = pct(tp1), tp2Pct = pct(tp2);
+  const riskBot = Math.min(entryPct, slPct), riskTop = Math.max(entryPct, slPct);
+  const profBot = Math.min(entryPct, tp1Pct), profTop = Math.max(entryPct, tp2Pct);
+
+  // R:R calculation
+  const riskAmt = Math.abs(entry - sl);
+  const rr1 = riskAmt > 0 ? (Math.abs(tp1 - entry) / riskAmt).toFixed(2) : '—';
+  const rr2 = riskAmt > 0 ? (Math.abs(tp2 - entry) / riskAmt).toFixed(2) : '—';
+
+  // Percentage moves
+  const slPctMove = ((sl - entry) / entry * 100).toFixed(2);
+  const tp1PctMove = ((tp1 - entry) / entry * 100).toFixed(2);
+  const tp2PctMove = ((tp2 - entry) / entry * 100).toFixed(2);
+
+  let html = '<div class="price-ladder"><div class="price-ladder-title">Price Levels</div><div class="ladder-container">';
+  html += '<div class="ladder-track"></div>';
+  // Risk zone
+  html += '<div class="ladder-zone risk" style="bottom:'+riskBot+'%;height:'+(riskTop-riskBot)+'%"></div>';
+  // Profit zone
+  html += '<div class="ladder-zone profit" style="bottom:'+profBot+'%;height:'+(profTop-profBot)+'%"></div>';
+
+  // Levels
+  levels.forEach(lv => {
+    const y = pct(lv.price);
+    const pctMove = lv.key === 'sl' ? slPctMove : lv.key === 'tp1' ? tp1PctMove : lv.key === 'tp2' ? tp2PctMove : null;
+    const pctLabel = pctMove ? '<div class="ladder-pct '+lv.cls+'">'+(parseFloat(pctMove)>0?'+':'')+pctMove+'%</div>' : '';
+    html += '<div class="ladder-level '+lv.cls+'" style="bottom:'+y+'%">' +
+      '<div class="ladder-label '+lv.cls+'">'+lv.label+'</div>' +
+      '<div class="ladder-line '+lv.line+'" style="color:currentColor"></div>' +
+      '<div class="ladder-price '+lv.cls+'">'+esc(String(lv.price))+'</div>' +
+      pctLabel +
+      '</div>';
+  });
+
+  html += '</div>';
+  html += '<div class="ladder-rr"><div class="ladder-rr-item">R:R to TP1 <span class="level-tp1">1:'+rr1+'</span></div>';
+  html += '<div class="ladder-rr-item">R:R to TP2 <span class="level-tp2">1:'+rr2+'</span></div></div></div>';
+  return html;
 }
 
 function esc(s) { var d=document.createElement('div'); d.textContent=String(s); return d.innerHTML; }
